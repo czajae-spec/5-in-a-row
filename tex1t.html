@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Five in a Row – Easy (Single Digits)</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #fff0f8; margin: 0; padding: 20px; text-align: center; }
+        h1 { color: #d473b8; }
+        #controls { margin: 20px; }
+        button { font-size: 1.2em; padding: 10px 20px; margin: 10px; background: #d473b8; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        button:hover { background: #c05ca3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        #game { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px; max-width: 1200px; margin: auto; }
+        .player { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        #p1 { border: 3px solid #ff69b4; }
+        #p2 { border: 3px solid #ff1493; }
+        h2 { margin: 0; }
+        #board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 500px; height: 500px; margin: 20px auto; }
+        .cell { background: white; border: 3px solid #333; font-size: 2em; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .cell:hover:not(.occupied) { background: #e9ecef; }
+        .cell.p1 { background: #ff69b4; color: white; }
+        .cell.p2 { background: #ff1493; color: white; }
+        .cell.highlight { box-shadow: 0 0 20px limegreen; }
+        #cards { display: flex; justify-content: center; gap: 30px; margin: 20px; }
+        .card { width: 120px; height: 180px; background: white; border: 4px solid #333; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 3em; font-weight: bold; box-shadow: 0 6px 12px rgba(0,0,0,0.2); }
+        #sum-input { font-size: 1.8em; width: 120px; padding: 10px; margin: 10px; text-align: center; }
+        #status { font-size: 1.6em; font-weight: bold; margin: 20px; min-height: 50px; color: #d473b8; }
+        #game-over { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; }
+        #game-over-content { background: white; padding: 40px; border-radius: 15px; text-align: center; font-size: 2em; }
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        #modal-content { background: white; padding: 30px; max-width: 800px; border-radius: 10px; position: relative; }
+        .close { position: absolute; top: 10px; right: 20px; font-size: 2em; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Five in a Row – Easy Mode (Single Digits)</h1>
+    <div id="controls">
+        <button id="instructions">How to Play</button>
+        <button id="new-game">New Game</button>
+    </div>
+
+    <div id="game">
+        <div id="p1" class="player"><h2>Player 1 (Light Pink)</h2></div>
+        <div>
+            <div id="status">Click "New Game" to start!</div>
+            <button id="draw-btn">Draw 2 Cards</button>
+            <div id="cards"></div>
+            <div id="sum-area" style="display:none;">
+                <label>Enter the sum: <input type="number" id="sum-input" min="2" max="18"></label>
+                <button id="check-sum">Check Sum</button>
+            </div>
+            <div id="board"></div>
+        </div>
+        <div id="p2" class="player"><h2>Player 2 (Hot Pink)</h2></div>
+    </div>
+
+    <div id="game-over">
+        <div id="game-over-content">
+            <div id="winner"></div>
+            <button onclick="game.newGame()">Play Again</button>
+        </div>
+    </div>
+
+    <div id="modal">
+        <div id="modal-content">
+            <span class="close">&times;</span>
+            <h2>How to Play – Easy Mode</h2>
+            <p>This easier version uses only single-digit numbers (1–9) so players practice adding within 18.</p>
+            <p>Players take turns drawing two cards, entering the correct sum, and placing a marker if the sum is on the board.</p>
+            <p>Capturing an opponent's marker gives an extra turn.</p>
+            <p>First to five in a row wins!</p>
+        </div>
+    </div>
+
+    <script>
+        const EASY_BOARD = [
+            [5, 10, 13, 8, 12],
+            [9, 14, 7, 11, 15],
+            [6, 12, 16, 9, 10],
+            [11, 8, 13, 17, 6],
+            [14, 7, 15, 10, 18]
+        ];
+
+        class EasyFiveInARow {
+            constructor() {
+                this.deck = [];
+                this.currentPlayer = 'p1';
+                this.cards = [];
+                this.correctSum = 0;
+                this.boardState = Array(5).fill().map(() => Array(5).fill(null));
+                this.canPlace = false;
+                this.placePos = null;
+                this.initDeck();
+                this.newGame();
+            }
+
+            initDeck() {
+                this.deck = [];
+                for (let i = 0; i < 6; i++) { // plenty of each digit
+                    for (let n = 1; n <= 9; n++) {
+                        this.deck.push(n);
+                    }
+                }
+                this.shuffle();
+            }
+
+            shuffle() {
+                for (let i = this.deck.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+                }
+            }
+
+            newGame() {
+                if (this.deck.length < 20) this.initDeck();
+                this.boardState = Array(5).fill().map(() => Array(5).fill(null));
+                this.currentPlayer = Math.random() < 0.5 ? 'p1' : 'p2';
+                this.cards = [];
+                this.canPlace = false;
+                this.placePos = null;
+                this.updateBoard();
+                this.updateStatus(`${this.currentPlayer === 'p1' ? 'Player 1' : 'Player 2'} goes first! Click "Draw 2 Cards"`);
+            }
+
+            drawCards() {
+                if (this.deck.length < 2) {
+                    alert("Not enough cards! Starting new game.");
+                    this.newGame();
+                    return;
+                }
+                this.cards = [this.deck.pop(), this.deck.pop()];
+                this.correctSum = this.cards[0] + this.cards[1];
+
+                document.getElementById('cards').innerHTML = `
+                    <div class="card">${this.cards[0]}</div>
+                    <div class="card">${this.cards[1]}</div>
+                `;
+                document.getElementById('sum-area').style.display = 'block';
+                document.getElementById('sum-input').value = '';
+                document.getElementById('sum-input').focus();
+                this.updateStatus(`Add the two numbers and enter the sum.`);
+            }
+
+            checkSum() {
+                const input = parseInt(document.getElementById('sum-input').value);
+                if (isNaN(input) || input !== this.correctSum) {
+                    alert("Incorrect sum! Try again.");
+                    return;
+                }
+
+                this.placePos = this.findPosition(this.correctSum);
+                if (!this.placePos) {
+                    alert(`Correct sum (${this.correctSum}), but it's not on the board. Next player's turn.`);
+                    this.nextPlayer();
+                    return;
+                }
+
+                this.canPlace = true;
+                this.highlightCell(this.placePos.r, this.placePos.c);
+                this.updateStatus(`Correct! Click the ${this.correctSum} on the board to place your marker.`);
+            }
+
+            findPosition(sum) {
+                for (let r = 0; r < 5; r++) {
+                    for (let c = 0; c < 5; c++) {
+                        if (EASY_BOARD[r][c] === sum) return { r, c };
+                    }
+                }
+                return null;
+            }
+
+            placeMarker(r, c) {
+                if (!this.canPlace || !this.placePos || this.placePos.r !== r || this.placePos.c !== c) return;
+
+                const wasOpponent = this.boardState[r][c] && this.boardState[r][c] !== this.currentPlayer;
+                this.boardState[r][c] = this.currentPlayer;
+
+                this.updateBoard();
+                document.getElementById('sum-area').style.display = 'none';
+                document.getElementById('cards').innerHTML = '';
+
+                if (this.checkWin()) {
+                    this.endGame(`${this.currentPlayer === 'p1' ? 'Player 1 (Light Pink)' : 'Player 2 (Hot Pink)'} Wins!`);
+                    return;
+                }
+
+                if (wasOpponent) {
+                    this.updateStatus(`Captured opponent's marker! ${this.currentPlayer === 'p1' ? 'Player 1' : 'Player 2'} gets another turn.`);
+                } else {
+                    this.nextPlayer();
+                }
+            }
+
+            checkWin() {
+                const p = this.currentPlayer;
+                for (let i = 0; i < 5; i++) {
+                    if (this.boardState[i].every(cell => cell === p)) return true;
+                    if (this.boardState.every(row => row[i] === p)) return true;
+                }
+                if ([0,1,2,3,4].every(i => this.boardState[i][i] === p)) return true;
+                if ([0,1,2,3,4].every(i => this.boardState[i][4-i] === p)) return true;
+                return false;
+            }
+
+            endGame(message) {
+                document.getElementById('winner').textContent = message;
+                document.getElementById('game-over').style.display = 'flex';
+            }
+
+            updateBoard() {
+                const board = document.getElementById('board');
+                board.innerHTML = '';
+                for (let r = 0; r < 5; r++) {
+                    for (let c = 0; c < 5; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        if (this.boardState[r][c]) cell.classList.add(this.boardState[r][c]);
+                        cell.textContent = EASY_BOARD[r][c];
+                        cell.onclick = () => this.placeMarker(r, c);
+                        board.appendChild(cell);
+                    }
+                }
+            }
+
+            highlightCell(r, c) {
+                document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('highlight'));
+                const index = r * 5 + c;
+                document.querySelectorAll('.cell')[index].classList.add('highlight');
+            }
+
+            nextPlayer() {
+                this.currentPlayer = this.currentPlayer === 'p1' ? 'p2' : 'p1';
+                this.updateStatus(`${this.currentPlayer === 'p1' ? 'Player 1' : 'Player 2'}'s turn – Click "Draw 2 Cards"`);
+                this.canPlace = false;
+            }
+
+            updateStatus(text) {
+                document.getElementById('status').textContent = text;
+            }
+        }
+
+        const game = new EasyFiveInARow();
+
+        document.getElementById('new-game').onclick = () => game.newGame();
+        document.getElementById('draw-btn').onclick = () => game.drawCards();
+        document.getElementById('check-sum').onclick = () => game.checkSum();
+        document.getElementById('sum-input').addEventListener('keypress', e => { if (e.key === 'Enter') game.checkSum(); });
+        document.getElementById('instructions').onclick = () => document.getElementById('modal').style.display = 'flex';
+        document.querySelector('.close').onclick = () => document.getElementById('modal').style.display = 'none';
+        document.getElementById('modal').onclick = (e) => { if (e.target === document.getElementById('modal')) document.getElementById('modal').style.display = 'none'; };
+    </script>
+</body>
+</html>
